@@ -1,7 +1,6 @@
 import os
 from supabase import create_client, Client
 from datetime import datetime, timedelta
-from mymemory_translator import translate
 import json
 from analyze_template import build_summary
 
@@ -29,13 +28,6 @@ def send_to_telegram(chat_id, text):
     response = requests.post(url, data=payload)
     return response.json()
 
-def translate_to_russian(text):
-    try:
-        result = translate(text, target_lang='ru')
-        return result
-    except Exception:
-        return text
-
 def run_analysis():
     periods = {
         'сутки': 24,
@@ -50,16 +42,11 @@ def run_analysis():
         if not news:
             continue
 
-        # Собираем все тексты
-        all_texts = []
-        urls = []
-        for item in news:
-            text = item['content']
-            translated = translate_to_russian(text)
-            all_texts.append(translated)
-            urls.append(f"[источник]({item['source_channel']})")  # Здесь можно указать реальный URL
+        # Собираем все тексты (уже на русском!)
+        all_texts = [item['content'] for item in news]
+        urls = [f"[{item['source_channel']}]({item['source_channel']})" for item in news]
 
-        # Генерируем аналитику
+        # Генерируем аналитику по вашему промту
         summary = build_summary(all_texts, urls, period_name)
 
         # Отправляем в Telegram

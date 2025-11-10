@@ -178,7 +178,7 @@ if __name__ == "__main__":
     # Запуск HTTP-сервера в фоновом потоке
     http_thread = threading.Thread(target=run_http_server, daemon=True)
     http_thread.start()
-    logging.info("HTTP Server started on 0.0.0.0:8080 for /send_daily endpoint")
+    logging.info("HTTP Server started on 0.0.0.0:10000 for /send_daily endpoint")
 
     # Запуск Telegram-бота
     app = Application.builder().token(BOT_TOKEN).build()

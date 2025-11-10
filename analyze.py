@@ -6,8 +6,8 @@ from analyze_template import build_summary
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-ANALYSIS_CHAT_ID = os.getenv("ANALYSIS_CHAT_ID")
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+ANALYSIS_CHAT_IDS = json.loads(os.getenv("ANALYSIS_CHAT_IDS", "[]"))
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -23,10 +23,15 @@ def send_to_telegram(chat_id, text):
     payload = {
         'chat_id': chat_id,
         'text': text,
-        'parse_mode': 'Markdown'
+        'parse_mode': 'Markdown',
+        'disable_web_page_preview': True
     }
-    response = requests.post(url, data=payload)
-    return response.json()
+    try:
+        response = requests.post(url, data=payload, timeout=10)
+        return response.json()
+    except Exception as e:
+        print(f"❌ Ошибка отправки в {chat_id}: {str(e)}")
+        return None
 
 def run_analysis():
     periods = {
@@ -42,17 +47,20 @@ def run_analysis():
         if not news:
             continue
 
-        # Собираем все тексты (уже на русском!)
+        # Формируем аналитику
         all_texts = [item['content'] for item in news]
         urls = [f"[{item['source_channel']}]({item['source_channel']})" for item in news]
-
-        # Генерируем аналитику по вашему промту
         summary = build_summary(all_texts, urls, period_name)
 
-        # Отправляем в Telegram
-        send_to_telegram(ANALYSIS_CHAT_ID, summary)
+        # Отправляем В ДВА КАНАЛА
+        for chat_id in ANALYSIS_CHAT_IDS:
+            result = send_to_telegram(int(chat_id), summary)
+            if result and result.get('ok'):
+                print(f"✅ Аналитика за {period_name} отправлена в {chat_id}")
+            else:
+                print(f"❌ Не удалось отправить в {chat_id}")
 
-        # Помечаем как обработанные
+        # Помечаем новости как обработанные
         ids = [item['id'] for item in news]
         supabase.table('news').update({'processed': True}).in_('id', ids).execute()
 

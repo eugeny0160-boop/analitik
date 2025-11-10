@@ -1,13 +1,13 @@
 # main.py
 import os
 import logging
-import asyncio
 from datetime import datetime, timedelta, timezone
 from telegram import Bot
 from telegram.ext import Application, MessageHandler, filters
 import psycopg2
-from http.server import HTTPServer, BaseHTTPRequestHandler # <-- Добавлено
-import threading # <-- Добавлено
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import threading
+import asyncio
 
 # === Конфигурация ===
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -178,9 +178,13 @@ if __name__ == "__main__":
     # Запуск HTTP-сервера в фоновом потоке
     http_thread = threading.Thread(target=run_http_server, daemon=True)
     http_thread.start()
-    logging.info("HTTP Server started on 0.0.0.0:10000 for /send_daily endpoint")
+    logging.info("HTTP Server started on 0.0.0.0:8080 for /send_daily endpoint")
 
-    # Запуск Telegram-бота
+    # Создание приложения (Application) вместо Updater
     app = Application.builder().token(BOT_TOKEN).build()
+
+    # Добавление обработчика сообщений
     app.add_handler(MessageHandler(filters.CHANNEL_POST, handle_channel_post))
+
+    # Запуск бота
     app.run_polling()

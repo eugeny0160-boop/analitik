@@ -4,9 +4,10 @@ from telegram.ext import Application, ContextTypes
 from supabase import create_client, Client
 import os
 from dotenv import load_dotenv
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import re
+import asyncio
 
 load_dotenv()
 
@@ -20,7 +21,7 @@ logger = logging.getLogger(__name__)
 # Подключение к Supabase
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Каналы, откуда читаем
 SOURCE_CHAT_IDS = json.loads(os.getenv("SOURCE_CHAT_IDS", "[]"))
@@ -36,7 +37,7 @@ KEYWORDS = [
 async def check_new_messages(context: ContextTypes.DEFAULT_TYPE):
     for chat_id in SOURCE_CHAT_IDS:
         try:
-            # Получаем последние 10 сообщений (можно увеличить)
+            # Получаем последние 10 сообщений
             updates = await context.bot.get_chat_history(chat_id=chat_id, limit=10)
             for message in updates.messages:
                 if not message.text:
@@ -46,8 +47,9 @@ async def check_new_messages(context: ContextTypes.DEFAULT_TYPE):
                 content = message.text
                 pub_date = message.date
 
-                # Проверяем дубль по заголовку
-                response = supabase.table('news').select('*').eq('title', title).execute()
+                # Проверяем дубль по заголовку (за последние 7 дней)
+                check_time = datetime.now() - timedelta(days=7)
+                response = supabase.table('news').select('*').eq('title', title).gte('pub_date', check_time.isoformat()).execute()
                 if response.data:
                     continue  # Пропускаем дубль
 

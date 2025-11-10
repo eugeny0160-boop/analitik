@@ -6,7 +6,6 @@ import os
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 import json
-import re
 import asyncio
 
 load_dotenv()
@@ -23,8 +22,8 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Каналы, откуда читаем
-SOURCE_CHAT_IDS = json.loads(os.getenv("SOURCE_CHAT_IDS", "[]"))
+# ОДИН источник для чтения
+SOURCE_CHAT_ID = os.getenv("SOURCE_CHAT_ID")
 
 # Ключевые слова для фильтрации
 KEYWORDS = [
@@ -35,44 +34,51 @@ KEYWORDS = [
 ]
 
 async def check_new_messages(context: ContextTypes.DEFAULT_TYPE):
-    for chat_id in SOURCE_CHAT_IDS:
-        try:
-            # Получаем последние 10 сообщений
-            updates = await context.bot.get_chat_history(chat_id=chat_id, limit=10)
-            for message in updates.messages:
-                if not message.text:
-                    continue
+    if not SOURCE_CHAT_ID:
+        logger.error("SOURCE_CHAT_ID не задан")
+        return
 
-                title = message.text[:100].strip()  # Первые 100 символов — для дедупликации
-                content = message.text
-                pub_date = message.date
+    try:
+        # Получаем последние 20 сообщений из ОДНОГО канала
+        updates = await context.bot.get_chat_history(
+            chat_id=int(SOURCE_CHAT_ID),
+            limit=20
+        )
+        
+        for message in updates.messages:
+            if not message.text:
+                continue
 
-                # Проверяем дубль по заголовку (за последние 7 дней)
-                check_time = datetime.now() - timedelta(days=7)
-                response = supabase.table('news').select('*').eq('title', title).gte('pub_date', check_time.isoformat()).execute()
-                if response.data:
-                    continue  # Пропускаем дубль
+            title = message.text[:100].strip()  # Первые 100 символов для дедупликации
+            content = message.text
+            pub_date = message.date
 
-                # Проверяем, содержит ли текст ключевые слова
-                text_lower = content.lower()
-                found_keywords = [kw for kw in KEYWORDS if kw in text_lower]
-                if not found_keywords:
-                    continue  # Не содержит нужных слов — пропускаем
+            # Проверяем дубли за последние 7 дней
+            check_time = datetime.now() - timedelta(days=7)
+            check = supabase.table('news').select('id').eq('title', title).gte('pub_date', check_time.isoformat()).execute()
+            if check.
+                continue
 
-                # Сохраняем в Supabase
-                supabase.table('news').insert({
-                    'title': title,
-                    'content': content,
-                    'source_channel': str(chat_id),
-                    'pub_date': pub_date.isoformat(),
-                    'keywords': found_keywords,
-                    'original_message_id': message.message_id
-                }).execute()
+            # Фильтрация по ключевым словам
+            text_lower = content.lower()
+            found_keywords = [kw for kw in KEYWORDS if kw in text_lower]
+            if not found_keywords:
+                continue
 
-                logger.info(f"Сообщение сохранено: {title[:50]}...")
+            # Сохраняем в Supabase
+            supabase.table('news').insert({
+                'title': title,
+                'content': content,
+                'source_channel': SOURCE_CHAT_ID,
+                'pub_date': pub_date.isoformat(),
+                'keywords': found_keywords,
+                'original_message_id': message.message_id
+            }).execute()
 
-        except Exception as e:
-            logger.error(f"Ошибка при чтении из чата {chat_id}: {e}")
+            logger.info(f"✅ Новость сохранена: {title[:50]}...")
+
+    except Exception as e:
+        logger.error(f"❌ Ошибка при чтении из {SOURCE_CHAT_ID}: {str(e)}")
 
 def main():
     application = Application.builder().token(os.getenv("BOT_TOKEN")).build()

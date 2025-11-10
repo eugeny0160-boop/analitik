@@ -3,5 +3,3 @@ supabase==2.8.1
 python-dotenv==1.0.1
 requests==2.31.0
 beautifulsoup4==4.12.3
-googletrans==4.0.0-rc1
-mymemory-translator==1.1.4
